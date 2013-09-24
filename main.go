@@ -82,59 +82,56 @@ func main() {
 	b := g.CrossProduct(a).Normalize().Scale(0.002)
 	c := a.Add(b).Scale(-256).Add(g)
 
-	rows := make(chan *row, *height)
+	rows := make(chan row, *height)
 	wg := &sync.WaitGroup{}
-	startWorkers(runtime.NumCPU(), rows, wg)
+	startWorkers(runtime.NumCPU(), &a, &b, &c, bytes, rows, wg)
 
 	for y := (*height - 1); y >= 0; y-- {
 		wg.Add(1)
-		rows <- &row{y: y, a: a, b: b, c: c, bytes: bytes}
+		rows <- row(y)
 	}
 
 	wg.Wait()
+	close(rows)
 
 	if _, err := os.Stdout.Write(bytes); err != nil {
 		log.Panic(err)
 	}
 }
 
-type row struct {
-	y       int
-	a, b, c vector.Vector
-	bytes   []byte
-}
+type row int
 
-func startWorkers(c int, rows <-chan *row, wg *sync.WaitGroup) {
-	for i := 0; i < c; i++ {
+func startWorkers(count int, a, b, c *vector.Vector, bytes []byte, rows <-chan row, wg *sync.WaitGroup) {
+	for i := 0; i < count; i++ {
 		go func() {
 			for {
 				r, ok := <-rows
 				if !ok {
 					return
 				}
-				renderRow(r)
+				renderRow(a, b, c, bytes, r)
 				wg.Done()
 			}
 		}()
 	}
 }
 
-func renderRow(r *row) {
-	k := (*height - r.y - 1) * 3 * *width
+func renderRow(a, b, c *vector.Vector, bytes []byte, r row) {
+	k := (*height - int(r) - 1) * 3 * *width
 
 	for x := (*width - 1); x >= 0; x-- {
 		p := vector.Vector{X: 13, Y: 13, Z: 13}
 
 		for i := 0; i < 64; i++ {
-			t := r.a.Scale(Rand() - 0.5).Scale(99).Add(r.b.Scale(Rand() - 0.5).Scale(99))
+			t := a.Scale(Rand() - 0.5).Scale(99).Add(b.Scale(Rand() - 0.5).Scale(99))
 			orig := vector.Vector{X: 17, Y: 16, Z: 8}.Add(t)
-			dir := t.Scale(-1).Add(r.a.Scale(Rand() + float64(x)).Add(r.b.Scale(float64(r.y) + Rand())).Add(r.c).Scale(16)).Normalize()
+			dir := t.Scale(-1).Add(a.Scale(Rand() + float64(x)).Add(b.Scale(float64(r) + Rand())).Add(*c).Scale(16)).Normalize()
 			p = sampler(orig, dir).Scale(3.5).Add(p)
 		}
 
-		r.bytes[k] = byte(p.X)
-		r.bytes[k+1] = byte(p.Y)
-		r.bytes[k+2] = byte(p.Z)
+		bytes[k] = byte(p.X)
+		bytes[k+1] = byte(p.Y)
+		bytes[k+2] = byte(p.Z)
 
 		k += 3
 	}
