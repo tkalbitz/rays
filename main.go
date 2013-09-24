@@ -55,9 +55,10 @@ func Rand() float64 {
 }
 
 var (
-	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
-	width      = flag.Int("width", 512, "width of the rendered image")
-	height     = flag.Int("height", 512, "height of the rendered image")
+	cpuprofile  = flag.String("cpuprofile", "", "write cpu profile to file")
+	width       = flag.Int("width", 512, "width of the rendered image")
+	height      = flag.Int("height", 512, "height of the rendered image")
+	sliceHeight = flag.Int("slice", 25, "height of render slice")
 )
 
 func main() {
@@ -73,6 +74,10 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
+	if *sliceHeight < 1 {
+		log.Fatalf("Slice height (%v) has to be >= 1", *sliceHeight)
+	}
+
 	fmt.Printf("P6 %v %v 255 ", *width, *height)
 
 	bytes := make([]byte, 3**width**height)
@@ -82,58 +87,62 @@ func main() {
 	b := g.CrossProduct(a).Normalize().Scale(0.002)
 	c := a.Add(b).Scale(-256).Add(g)
 
-	rows := make(chan row, *height)
+	slices := make(chan *slice, *height)
 	wg := &sync.WaitGroup{}
-	startWorkers(runtime.NumCPU(), &a, &b, &c, bytes, rows, wg)
+	startWorkers(runtime.NumCPU(), &a, &b, &c, bytes, slices, wg)
 
-	for y := (*height - 1); y >= 0; y-- {
+	for y := 0; y < *height; y += *sliceHeight {
 		wg.Add(1)
-		rows <- row(y)
+		slices <- &slice{maxY: y, minY: int(math.Max(float64(y-*sliceHeight), 0))}
 	}
 
 	wg.Wait()
-	close(rows)
+	close(slices)
 
 	if _, err := os.Stdout.Write(bytes); err != nil {
 		log.Panic(err)
 	}
 }
 
-type row int
+type slice struct {
+	minY, maxY int
+}
 
-func startWorkers(count int, a, b, c *vector.Vector, bytes []byte, rows <-chan row, wg *sync.WaitGroup) {
+func startWorkers(count int, a, b, c *vector.Vector, bytes []byte, slices <-chan *slice, wg *sync.WaitGroup) {
 	for i := 0; i < count; i++ {
 		go func() {
 			for {
-				r, ok := <-rows
+				s, ok := <-slices
 				if !ok {
 					return
 				}
-				renderRow(a, b, c, bytes, r)
+				renderSlice(a, b, c, bytes, s)
 				wg.Done()
 			}
 		}()
 	}
 }
 
-func renderRow(a, b, c *vector.Vector, bytes []byte, r row) {
-	k := (*height - int(r) - 1) * 3 * *width
+func renderSlice(a, b, c *vector.Vector, bytes []byte, s *slice) {
+	k := (*height - s.maxY - 1) * 3 * *width
 
-	for x := (*width - 1); x >= 0; x-- {
-		p := vector.Vector{X: 13, Y: 13, Z: 13}
+	for y := s.maxY; y >= s.minY; y-- {
+		for x := (*width - 1); x >= 0; x-- {
+			p := vector.Vector{X: 13, Y: 13, Z: 13}
 
-		for i := 0; i < 64; i++ {
-			t := a.Scale(Rand() - 0.5).Scale(99).Add(b.Scale(Rand() - 0.5).Scale(99))
-			orig := vector.Vector{X: 17, Y: 16, Z: 8}.Add(t)
-			dir := t.Scale(-1).Add(a.Scale(Rand() + float64(x)).Add(b.Scale(float64(r) + Rand())).Add(*c).Scale(16)).Normalize()
-			p = sampler(orig, dir).Scale(3.5).Add(p)
+			for i := 0; i < 64; i++ {
+				t := a.Scale(Rand() - 0.5).Scale(99).Add(b.Scale(Rand() - 0.5).Scale(99))
+				orig := vector.Vector{X: 17, Y: 16, Z: 8}.Add(t)
+				dir := t.Scale(-1).Add(a.Scale(Rand() + float64(x)).Add(b.Scale(float64(y) + Rand())).Add(*c).Scale(16)).Normalize()
+				p = sampler(orig, dir).Scale(3.5).Add(p)
+			}
+
+			bytes[k] = byte(p.X)
+			bytes[k+1] = byte(p.Y)
+			bytes[k+2] = byte(p.Z)
+
+			k += 3
 		}
-
-		bytes[k] = byte(p.X)
-		bytes[k+1] = byte(p.Y)
-		bytes[k+2] = byte(p.Z)
-
-		k += 3
 	}
 }
 
