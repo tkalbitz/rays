@@ -87,13 +87,13 @@ func main() {
 	b := g.CrossProduct(a).Normalize().Scale(0.002)
 	c := a.Add(b).Scale(-256).Add(g)
 
-	slices := make(chan *slice, *height)
+	slices := make(chan slice, *height)
 	wg := &sync.WaitGroup{}
 	startWorkers(runtime.NumCPU(), &a, &b, &c, bytes, slices, wg)
 
-	for y := 0; y < *height; y += *sliceHeight {
+	for _, s := range slicer() {
 		wg.Add(1)
-		slices <- &slice{maxY: y, minY: int(math.Max(float64(y-*sliceHeight), 0))}
+		slices <- s
 	}
 
 	wg.Wait()
@@ -108,7 +108,15 @@ type slice struct {
 	minY, maxY int
 }
 
-func startWorkers(count int, a, b, c *vector.Vector, bytes []byte, slices <-chan *slice, wg *sync.WaitGroup) {
+func slicer() []slice {
+	slices := make([]slice, 0)
+	for y := 0; y < *height; y += *sliceHeight {
+		slices = append(slices, slice{minY: y, maxY: int(math.Min(float64(y+*sliceHeight), float64(*height-1)))})
+	}
+	return slices
+}
+
+func startWorkers(count int, a, b, c *vector.Vector, bytes []byte, slices <-chan slice, wg *sync.WaitGroup) {
 	for i := 0; i < count; i++ {
 		go func() {
 			for {
@@ -123,7 +131,7 @@ func startWorkers(count int, a, b, c *vector.Vector, bytes []byte, slices <-chan
 	}
 }
 
-func renderSlice(a, b, c *vector.Vector, bytes []byte, s *slice) {
+func renderSlice(a, b, c *vector.Vector, bytes []byte, s slice) {
 	k := (*height - s.maxY - 1) * 3 * *width
 
 	for y := s.maxY; y >= s.minY; y-- {
