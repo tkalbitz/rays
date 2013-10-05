@@ -9,12 +9,17 @@ typedef struct {
   float x,y,z;  // Vector has three float attributes.
 } vector;
 
+inline vector cvector(const float x, const float y, const float z) { vector t = { .x = x, .y = y, .z = z}; return t; }
+
+#define ADD(a, b) cvector((a).x+(b).x, (a).y+(b).y, (a).z+(b).z)
+#define DOT(a, b) ((a).x*(b).x+(a).y*(b).y+(a).z*(b).z)
+#define MUL(a, b) cvector((a).x*(b), (a).y*(b), (a).z*(b))
+
 inline vector add  (const vector a, const vector b) { vector t = { .x = a.x+b.x, .y = a.y+b.y, .z = a.z+b.z}; return t; }
 inline vector mul  (const vector a, const float  b) { vector t = { .x = a.x*b, .y = a.y*b, .z = a.z*b}; return t; }
 inline vector cross(const vector a, const vector b) { vector t = { .x = a.y*b.z-a.z*b.y, .y = a.z*b.x-a.x*b.z, .z = a.x*b.y-a.y*b.x}; return t; }
 inline float  dot  (const vector a, const vector b) { return a.x*b.x+a.y*b.y+a.z*b.z; }
-inline vector norm (const vector a)           { return mul(a, (1/sqrtf(dot(a, a)))); }
-inline vector cvector(const float x, const float y, const float z) { vector t = { .x = x, .y = y, .z = z}; return t; }
+inline vector norm (const vector a)           { return mul(a, (1/sqrtf(DOT(a, a)))); }
 
 int w = 512, h = 512;
 vector g, a, b, c;
@@ -76,11 +81,11 @@ int T(vector o, const vector* d, float* t, vector* n) {
   if(.01f < p)
     *t = p, *n = vec1, m = 1;
 
-  o = add(o, vec2);
+  o = ADD(o, vec2);
   for (int i = 0; i < object_count; i++) {
     // There is a sphere but does the ray hits it ?
-    vector p = add(o, objects[i]);
-    float b = dot(p, *d), c = dot(p, p) - 1, b2 = b * b;
+    vector p = ADD(o, objects[i]);
+    float b  = DOT(p, *d), c = DOT(p, p) - 1, b2 = b * b;
 
     // Does the ray hit the sphere ?
     if(b2 > c) {
@@ -90,7 +95,7 @@ int T(vector o, const vector* d, float* t, vector* n) {
       if(s < *t && s > .01f)
       // So far this is the minimum distance, save it. And also
       // compute the bouncing ray vector into 'n'
-      *t = s, *n = norm(add(p, mul(*d, *t))), m = 2;
+      *t = s, *n = norm(add(p, MUL(*d, *t))), m = 2;
     }
   }
 
@@ -120,7 +125,7 @@ vector S(const vector* o, const vector* d, unsigned int* seed) {
   vector l = norm( add( cvector(9 + R(seed), 9 + R(seed), 16), mul(h, -1)));  // 'l' = direction to light (with random delta for soft-shadows).
 
   //Calculated the lambertian factor
-  float b = dot(l, n);
+  float b = DOT(l, n);
 
   //Calculate illumination factor (lambertian coefficient > 0 or in shadow)?
   if(b < 0 || T(h, &l, &t, &n))
