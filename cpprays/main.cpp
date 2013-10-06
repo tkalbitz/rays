@@ -7,17 +7,81 @@
 #include <vector>
 #include <string>
 
-//Define a vector class with constructor and operator: 'v'
-struct vector {
-  float x,y,z;  // Vector has three float attributes.
-  vector operator+(vector r) const {return vector(x+r.x,y+r.y,z+r.z);} //Vector add
-  vector operator*(float r) const {return vector(x*r,y*r,z*r);}       //Vector scaling
-  float operator%(vector r) const {return x*r.x+y*r.y+z*r.z;}    //Vector dot product
-  vector(){}                                  //Empty constructor
-  vector operator^(vector r) const {return vector(y*r.z-z*r.y,z*r.x-x*r.z,x*r.y-y*r.x);} //Cross-product
-  vector(float a,float b,float c){x=a;y=b;z=c;}            //Constructor
-  vector operator!() const {return *this*(1/sqrtf(*this%*this));} // Used later for normalizing the vector
+#if defined(RAYS_CPP_SSE)
+#include <smmintrin.h>
+#endif
+
+#if defined(RAYS_CPP_SSE)
+
+class vector {
+public:
+  vector() { }
+  vector(__m128 a) { xyzw = a; }
+  vector(float a, float b, float c) {
+    xyzw = _mm_set_ps(0.0, c, b, a);
+  }
+
+  float x() const { float v[4]; _mm_store_ps(v, xyzw); return v[0]; }
+  float y() const { float v[4]; _mm_store_ps(v, xyzw); return v[1]; }
+  float z() const { float v[4]; _mm_store_ps(v, xyzw); return v[2]; }
+
+  vector operator+(const vector r) const {
+    return _mm_add_ps(xyzw, r.xyzw);
+  }
+  vector operator*(const float r) const {
+    return _mm_mul_ps(_mm_set1_ps(r), xyzw);
+  }
+  float operator%(const vector r) const {
+    float ret; _mm_store_ss(&ret, _mm_dp_ps(r.xyzw, xyzw, 0x71));
+    return ret;
+  }
+  vector operator^(vector r) const {
+    const __m128 & a = xyzw, & b = r.xyzw;
+    return _mm_sub_ps(
+      _mm_mul_ps(_mm_shuffle_ps(a, a, _MM_SHUFFLE(3, 0, 2, 1)), _mm_shuffle_ps(b, b, _MM_SHUFFLE(3, 1, 0, 2))),
+      _mm_mul_ps(_mm_shuffle_ps(a, a, _MM_SHUFFLE(3, 1, 0, 2)), _mm_shuffle_ps(b, b, _MM_SHUFFLE(3, 0, 2, 1)))
+    );
+  }
+  vector operator!() const {
+    return *this*(1.f/sqrtf(*this%*this));
+  }
+
+private:
+    __m128 xyzw;
 };
+
+#else
+
+class vector {
+public:
+  vector(){}
+  vector(float a, float b, float c) { _x=a; _y=b; _z=c; }
+
+  float x() const { return _x; }
+  float y() const { return _y; }
+  float z() const { return _z; }
+
+  vector operator+(vector r) const {
+    return vector(_x+r._x, _y+r._y, _z+r._z);
+  }
+  vector operator*(float r) const {
+    return vector(_x*r, _y*r, _z*r);
+  }
+  float operator%(vector r) const {
+    return _x*r._x + _y*r._y + _z*r._z;
+  }
+  vector operator^(vector r) const {
+    return vector(_y*r._z - _z*r._y, _z*r._x - _x*r._z, _x*r._y-_y*r._x);
+  }
+  vector operator!() const {
+    return *this * (1.f / sqrtf(*this % *this));
+  }
+
+private:
+  float _x, _y, _z;  // Vector has three float attributes.
+};
+
+#endif
 
 struct object {
   float k,j;
@@ -57,7 +121,7 @@ float R(unsigned int& seed) {
 int T(vector o,vector d,float& t,vector& n) {
   t=1e9;
   int m=0;
-  const float p=-o.z/d.z;
+  const float p=-o.z()/d.z();
 
   if(.01f<p)
     t=p,n=vector(0,0,1),m=1;
@@ -86,11 +150,9 @@ vector S(vector o,vector d, unsigned int& seed) {
   const int m=T(o,d,t,n);
   const vector on = n;
 
-  if(!m) { // m==0
-    float p = 1-d.z;
-    p = p*p;
-    p = p*p;
-    return vector(.7f,.6f,1)*p;
+  if(!m) {
+    float p = 1 - d.z();
+    return vector(1.f, 1.f, 1.f) * p;
   }
 
   vector h=o+d*t,
@@ -103,7 +165,7 @@ vector S(vector o,vector d, unsigned int& seed) {
 
   if(m&1) {   //m == 1
     h=h*.2f;
-    return((int)(ceil(h.x)+ceil(h.y))&1?vector(3,1,1):vector(3,3,3))*(b*.2f+.1f);
+    return((int)(ceil(h.x())+ceil(h.y()))&1?vector(3,1,1):vector(3,3,3))*(b*.2f+.1f);
   }
 
   const vector r=d+on*(on%d*-2);               // r = The half-vector
@@ -122,15 +184,25 @@ vector S(vector o,vector d, unsigned int& seed) {
 
 int main(int argc, char **argv) {
   const Art art {
-    "                   ",
-    "    1111           ",
-    "   1    1          ",
-    "  1           11   ",
-    "  1          1  1  ",
-    "  1     11  1    1 ",
-    "  1      1  1    1 ",
-    "   1     1   1  1  ",
-    "    11111     11   "
+    " 1111            1     ",
+    " 1   11         1 1    ",
+    " 1     1       1   1   ",
+    " 1     1      1     1  ",
+    " 1    11     1       1 ",
+    " 11111       111111111 ",
+    " 1    1      1       1 ",
+    " 1     1     1       1 ",
+    " 1      1    1       1 ",
+    "                       ",
+    "1         1    11111   ",
+    " 1       1    1        ",
+    "  1     1    1         ",
+    "   1   1     1         ",
+    "    1 1       111111   ",
+    "     1              1  ",
+    "     1              1  ",
+    "     1             1   ",
+    "     1        111111   "
   };
 
   objects = makeObjects(art);
@@ -142,8 +214,8 @@ int main(int argc, char **argv) {
     return defaultValue;
   };
 
-  const auto w = getIntArg(1, 512);
-  const auto h = getIntArg(2, 512);
+  const auto w = getIntArg(1, 768);
+  const auto h = getIntArg(2, 768);
   const auto num_threads = [&]() {
     int x = getIntArg(3, 0);
     if(x <= 0) {
@@ -158,7 +230,7 @@ int main(int argc, char **argv) {
 
   printf("P6 %d %d 255 ", w, h); // The PPM Header is issued
 
-  const vector g=!vector(-5.5f,-16,0),
+  const vector g=!vector(-6.75f, -16.f, 1.f),
     a=!(vector(0,0,1)^g) * .002f,
     b=!(g^a)*.002f,
     c=(a+b)*-256+g;
@@ -180,9 +252,9 @@ int main(int argc, char **argv) {
             seed)*3.5f+p;
         }
 
-        bytes[k++] = (char)p.x;
-        bytes[k++] = (char)p.y;
-        bytes[k++] = (char)p.z;
+        bytes[k++] = (char)p.x();
+        bytes[k++] = (char)p.y();
+        bytes[k++] = (char)p.z();
       }
     }
   };
