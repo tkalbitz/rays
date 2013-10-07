@@ -134,10 +134,10 @@ final class Worker implements Runnable  {
 
     @Override
     public void run() {
-        for (int y = offset; y < Raycaster.h; y += jump) { // For each row
-            int k = (Raycaster.h - y - 1) * Raycaster.w * 3;
+        for (int y = offset; y < Raycaster.size; y += jump) { // For each row
+            int k = (Raycaster.size - y - 1) * Raycaster.size * 3;
 
-            for (int x = Raycaster.w; x-- > 0 ; ) { // For each pixel in a line
+            for (int x = Raycaster.size; x-- > 0 ; ) { // For each pixel in a line
                 // Reuse the vector class to store not XYZ but a RGB pixel color
                 final vector p = innerLoop(y, x, DEFAULT_COLOR);
                 Raycaster.bytes[k++] = (byte) p.x;
@@ -161,8 +161,8 @@ final class Worker implements Runnable  {
             // Accumulate the color returned in the p variable
 
             // Ray Direction with random deltas
-            final vector tmpA = Raycaster.a.mul(ThreadLocalRandom.current().nextFloat() + x);
-            final vector tmpB = Raycaster.b.mul(ThreadLocalRandom.current().nextFloat() + y);
+            final vector tmpA = Raycaster.a.mul(ThreadLocalRandom.current().nextFloat() + x * Raycaster.aspectRatio);
+            final vector tmpB = Raycaster.b.mul(ThreadLocalRandom.current().nextFloat() + y * Raycaster.aspectRatio);
             final vector tmpC = tmpA.add(tmpB).add(Raycaster.c);
             final vector rayDirection = t.mul(-1).add(tmpC.mul(16.f)).norm();
 
