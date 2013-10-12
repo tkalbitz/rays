@@ -7,6 +7,10 @@ Ray tracing based language benchmark inspired from:
   * http://www.cs.utah.edu/~aek/code/card.cpp ([expanded](https://gist.github.com/kid0m4n/6680629))
   * http://fabiensanglard.net/rayTracing_back_of_business_card/index.php
 
+## Reference Image
+
+Reference image rendered using the C++ version: [1 Megapixel](https://kidoman.com/images/reference_rays_1m.jpg) (also [2](https://kidoman.com/images/reference_rays_2m.jpg), [3](https://kidoman.com/images/reference_rays_3m.jpg) and [4](https://kidoman.com/images/reference_rays_4m.jpg))
+
 ## Why?
 
 I have written two blog posts describing the intent behind this:
@@ -39,12 +43,17 @@ Currently, the following versions are currently available, and tracked in their 
   * Java (optimized, multi-threaded)
   * Ruby (multi-threaded)
   * Julia (optimized, single-threaded)
+  * Nimrod (optimized, multi-threaded)
 
 Please feel free to implement the benchmark (refer to the original C++ version [here](https://gist.github.com/kid0m4n/6680629)) in the language of your choice. All optimizations are welcome but try not to stray away too far from the spirit of the original algorithm. The existing implementations can always act as a litmus test.
 
 Also, optimizations to the existing implementation are obviously welcome. I will regularly update the results based on activity/updates to the code.
 
 # How to use
+
+## RAYS_HOME
+
+Set **RAYS_HOME** environment variable to the top level `rays` folder before running any of the benchmarks
 
 ## Benchmark Run
 
@@ -73,6 +82,7 @@ We currently have implementations from:
   * Java (thanks to Tobias Kalbitz)
   * Ruby (thanks to Michael Macias)
   * Julia (thanks to Jake Bolewski)
+  * Nimrod (thanks to Erik O'Leary)
 
 Please refer to individual README files in the specific folders to find out instructions on how to run the specific benchmark.
 
@@ -100,5 +110,6 @@ The following have contributed to the project one way or the other:
   * [Lee Baker](https://github.com/leecbaker)
   * [Michael Macias](https://github.com/zaeleus)
   * [Jake Bolewski](https://github.com/jakebolewski)
+  * [Erik O'Leary](https://github.com/onionhammer)
 
 Thanks to everyone for all the help given :)

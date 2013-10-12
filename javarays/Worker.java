@@ -14,13 +14,12 @@ final class Worker implements Runnable  {
     private static final RayVector SKY_VEC   = new RayVector(1.f,  1.f,  1.f);
 
     // Ray Origin
-    private static final RayVector CAM_FOCAL_VEC   = new RayVector(16.f, 16.f,  8.f);
-    private static final RayVector T_CONST_VEC     = new RayVector( 0.f,  3.f, -4.f);
+    private static final RayVector CAM_FOCAL_VEC   = new RayVector(-5.f, 16.f,  8.f);
     private static final RayVector FLOOR_PATTERN_1 = new RayVector( 3.f,  1.f,  1.f);
     private static final RayVector FLOOR_PATTERN_2 = new RayVector( 3.f,  3.f,  3.f);
 
     private static final RayVector STD_VEC   = new RayVector(0.f,  0.f,  1.f);
-    private static final RayVector g = (new RayVector(-3.1f, -16.f, 3.2f)).norm(); // WTF ? See https://news.ycombinator.com/item?id=6425965 for more.
+    private static final RayVector g = (new RayVector(-3.1f, -16.f, 1.9f)).norm(); // WTF ? See https://news.ycombinator.com/item?id=6425965 for more.
 
     private static final RayVector a = (STD_VEC.cross(g)).norm().scale(.002f);
     private static final RayVector b = (g.cross(a)).norm().scale(.002f);
@@ -59,8 +58,6 @@ final class Worker implements Runnable  {
             m = 1;
         }
 
-        orig = orig.add(T_CONST_VEC);
-        RayVector last = null;
         for(int i = 0; i < objects.length; i++) {
             // There is a sphere but does the ray hits it ?
             final RayVector p1 = orig.add(objects[i]);
@@ -75,15 +72,11 @@ final class Worker implements Runnable  {
                 final float s = (float) (-b - Math.sqrt(q));
 
                 if (s < t && s > .01f) {
-                    last = p1;
                     t = s;
+                    n = (p1.add(dir.scale(t))).norm();
                     m = 2;
                 }
             }
-        }
-
-        if(last != null) {
-            n = (last.add(dir.scale(t))).norm();
         }
 
         return m;
@@ -127,14 +120,7 @@ final class Worker implements Runnable  {
         final RayVector r = dir.add(on.scale(on.dot(dir.scale(-2.f)))); // r = The half-vector
 
         // Calculate the color 'p' with diffuse and specular component
-        float p = l.dot(r.scale(b > 0 ? 1.f : 0.f));
-        float p33 = p * p;
-        p33 = p33 * p33;
-        p33 = p33 * p33;
-        p33 = p33 * p33;
-        p33 = p33 * p33;
-        p33 = p33 * p;
-        p = p33 * p33 * p33;
+        float p = (float)Math.pow(l.dot(r.scale(b > 0 ? 1.f : 0.f)), 99.0);
 
         // m == 2 A sphere was hit. Cast an ray bouncing from the sphere surface.
         // Attenuate color by 50% since it is bouncing (*.5)
@@ -149,9 +135,9 @@ final class Worker implements Runnable  {
             for (int x = Raycaster.size; x-- > 0 ; ) { // For each pixel in a line
                 // Reuse the vector class to store not XYZ but a RGB pixel color
                 final RayVector p = innerLoop(y, x, DEFAULT_COLOR);
-                bytes[k++] = (byte) p.x;
-                bytes[k++] = (byte) p.y;
-                bytes[k++] = (byte) p.z;
+                bytes[k++] = clamp(p.x);
+                bytes[k++] = clamp(p.y);
+                bytes[k++] = clamp(p.z);
             }
         }
     }
@@ -178,5 +164,12 @@ final class Worker implements Runnable  {
             p = sample(CAM_FOCAL_VEC.add(t), rayDirection).scale(3.5f).add(p); // +p for color accumulation
         }
         return p;
+    }
+
+    private final byte clamp(final float v) {
+        if (v > 255.f) {
+            return (byte) 255;
+        }
+        return (byte) v;
     }
 }
